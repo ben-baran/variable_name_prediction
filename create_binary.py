@@ -15,11 +15,16 @@ with open('data/json_seeks.pkl', 'rb') as seeks_file:
 
 fin = open('java_names/output.json', 'r')
 
-save_folder = 'data/test/'
-context_files = {}
+train_save_folder = 'data/train_tmp/'
+val_save_folder = 'data/val_tmp/'
+test_save_folder = 'data/test_tmp/'
+train_context_files, val_context_files, test_context_files = {}, {}, {}
 random.shuffle(file_seeks)
 
-max_uses = 1000
+max_uses = 5000
+proportion_validation = 0.1
+proportion_test = 0.1
+
 bar = tqdm(total = min(max_uses, len(file_seeks)), desc = 'processing', unit = 'ctx groups')
 for seek_i, seek in enumerate(file_seeks):
     # For every set of contexts this outputs: N_CTX ID BEFORE_CTX AFTER_CTX BEFORE_CTX AFTER_CTX
@@ -30,7 +35,18 @@ for seek_i, seek in enumerate(file_seeks):
     data = json.loads(line)
     n_contexts = len(data['usage'])
     
-    # Now specify the file for n_contexts. Create a new one if it doesn't exist
+    # Now specify the file for n_contexts. Create a new one if it doesn't exist.
+    # Randomly choose from train, validation, or test
+    prop = random.random()
+    if prop < proportion_validation:
+        save_folder = val_save_folder
+        context_files = val_context_files
+    elif prop < proportion_validation + proportion_test:
+        save_folder = test_save_folder
+        context_files = test_context_files
+    else:
+        save_folder = train_save_folder
+        context_files = train_context_files
     if n_contexts not in context_files:
         context_files[n_contexts] = open(save_folder + '%d.bin' % n_contexts, 'wb')
     fout = context_files[n_contexts]
