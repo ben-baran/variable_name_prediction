@@ -4,7 +4,7 @@ import struct
 import json
 from tqdm import tqdm
 import re
-from utils import ComboVocab, to_subtokenized_list, subtokenize
+from utils import ComboVocab, to_subtokenized_list, subtokenize, rough_print
 
 n_ctx = 64 # size of context per side. This is decided earlier in the processing pipeline.
 combo_vocab = ComboVocab()
@@ -17,10 +17,10 @@ with open('data_options.json') as options_f:
     
 fin = open('java_names/output.json', 'r')
 
-train_save_folder = 'data/train_full/'
-val_save_folder = 'data/val_full/'
-test_save_folder = 'data/test_full/'
-max_uses = int(1e32)
+train_save_folder = 'data/train_small/'
+val_save_folder = 'data/val_small/'
+test_save_folder = 'data/test_small/'
+max_uses = int(500000)
 max_pred_subtokens = options['max_subtokens_predicted']
 proportion_validation = options['proportion_validation']
 proportion_test = options['proportion_test']
@@ -31,6 +31,7 @@ random.shuffle(file_seeks)
 n_unclear_skips = 0
 
 
+n_processed = 0
 bar = tqdm(total = min(max_uses, len(file_seeks)), desc = 'processing', unit = 'ctx groups')
 for seek_i, seek in enumerate(file_seeks):
     # For every set of contexts this outputs: N_CTX ID BEFORE_CTX AFTER_CTX BEFORE_CTX AFTER_CTX
@@ -70,15 +71,15 @@ for seek_i, seek in enumerate(file_seeks):
     if not unclear_subtoken:
         var_subids.extend(combo_vocab.to_ids(['<<PAD>>' for i in range(max_pred_subtokens - len(var_subids))]))
         fout.write(struct.pack('<%dI' % max_pred_subtokens, *var_subids))
-
         for context in data['usage']:
             context_a = to_subtokenized_list(context[:ctx_width])[-ctx_width:]
-            context_b = to_subtokenized_list(context[ctx_width+1:])[:-(ctx_width+1):-1]
+            context_b = to_subtokenized_list(context[ctx_width+1:])[ctx_width-1::-1]
             fout.write(struct.pack('<%dI' % ctx_width, *combo_vocab.to_ids(context_a)))
             fout.write(struct.pack('<%dI' % ctx_width, *combo_vocab.to_ids(context_b)))
     
+    n_processed += 1
     bar.update(1)
-    if seek_i == max_uses - 1:
+    if n_processed == max_uses:
         break
 
 bar.close()
