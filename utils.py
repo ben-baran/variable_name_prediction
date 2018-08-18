@@ -198,7 +198,7 @@ class ContextLoader:
         output_tokens = [u + [self.pad_token_id for i in range(longest_var - len(u))] for u in output_tokens]
         input_tokens = mx.nd.array(input_tokens, ctx = self.ctx).T
         output_tokens = mx.nd.array(output_tokens, ctx = self.ctx).T.reshape((-1,))
-        pre_contexts = mx.nd.array(pre_contexts, ctx = self.ctx).transpose((0, 2, 1))
-        post_contexts = mx.nd.array(post_contexts, ctx = self.ctx).transpose((0, 2, 1))
+        pre_contexts = mx.nd.array(pre_contexts, ctx = self.ctx).transpose((1, 2, 0))
+        post_contexts = mx.nd.array(post_contexts, ctx = self.ctx).transpose((1, 2, 0))
 
         return pre_contexts.T, post_contexts.T, input_tokens, output_tokens

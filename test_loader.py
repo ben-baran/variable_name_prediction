@@ -17,8 +17,8 @@ for pre_contexts, post_contexts, in_tokens, out_tokens in loader.iterator():
     #for i in range(1):
         #print('inputs:', vocab.to_tokens([int(x) for x in in_tokens[:, i].asnumpy()]))
         #print('outputs:', vocab.to_tokens([int(x) for x in out_tokens.reshape((-1, 32))[:, i].asnumpy()]))
-        #print('pre context:', vocab.to_tokens([int(x) for x in pre_contexts[0, :, i].asnumpy()]))
-        #print('post context:', vocab.to_tokens([int(x) for x in post_contexts[0, :, i].asnumpy()]))
+        #print('pre context:', vocab.to_tokens([int(x) for x in pre_contexts[i, :, 0].asnumpy()]))
+        #print('post context:', vocab.to_tokens([int(x) for x in post_contexts[i, :, 0].asnumpy()]))
     
 toc = time.time()
 print("Total number of context groups:", n_context_groups)
