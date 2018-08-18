@@ -1,4 +1,23 @@
-from utils import ContextLoader
+from utils import ContextLoader, ComboVocab
+import time
 
-loader = ContextLoader()
-loader.get_batch()
+tic = time.time()
+vocab = ComboVocab()
+loader = ContextLoader(vocab, batch_size = 32)
+toc = time.time()
+print("Time for initial load:", toc - tic)
+tic = toc
+
+n_batches = 0
+for pre_contexts, post_contexts, in_tokens, out_tokens in loader.iterator():
+    n_batches += 1
+    """
+    for i in range(32):
+        print('inputs:', vocab.to_tokens([int(x) for x in in_tokens[:, i]]))
+        print('outputs:', vocab.to_tokens([int(x) for x in out_tokens.reshape((-1, 32))[:, i]]))
+        print('pre context:', vocab.to_tokens([int(x) for x in pre_contexts[0][:, i]]))
+        print('post context:', vocab.to_tokens([int(x) for x in post_contexts[0][:, i]]))
+    """
+toc = time.time()
+print("Total batch load time: %f, number of batches: %d" % (toc - tic, n_batches))
+print("Average time per batch:", (toc - tic) / n_batches)

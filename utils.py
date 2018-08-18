@@ -48,14 +48,22 @@ class ComboVocab:
     literal_constants = ['char', 'string', 'float', 'double', 'hex_int', 'bin_int', 'int', 'start_id', 'end_id']
     const_to_literal = {s:i for i, s in enumerate(literal_constants)}
     
-    def __init__(self, counters_fname = 'data/counters.pkl', min_for_vocabulary = 4096):
-        with open(counters_fname, 'rb') as counter_file:
-            self.subtok_counter, self.other_counter = pickle.load(counter_file)
-        self.subtok_counter['_'] = min_for_vocabulary
-        self.subtok_counter['__'] = min_for_vocabulary # I had forgotten that these can exist on their own
-        self.subtok_vocab = mtext.vocab.Vocabulary(self.subtok_counter, min_freq = min_for_vocabulary)
+    def __init__(self, vocabs_fname = 'data/vocab4096.pkl', counters_fname = 'data/counters.pkl', min_for_vocabulary = 4096):
+        if not os.path.isfile(vocabs_fname):
+            print("Vocabulary not cached, have to build...")
+            with open(counters_fname, 'rb') as counters_file:
+                subtok_counter, other_counter = pickle.load(counters_file)
+            subtok_counter['_'] = min_for_vocabulary
+            subtok_counter['__'] = min_for_vocabulary # I had forgotten that these can exist on their own
+            self.subtok_vocab = mtext.vocab.Vocabulary(subtok_counter, min_freq = min_for_vocabulary)
+            self.other_vocab = mtext.vocab.Vocabulary(other_counter, min_freq = min_for_vocabulary)
+            with open(vocabs_fname, 'wb') as vocabs_file:
+                pickle.dump((self.subtok_vocab, self.other_vocab), vocabs_file)
+        else:
+            with open(vocabs_fname, 'rb') as vocabs_file:
+                self.subtok_vocab, self.other_vocab = pickle.load(vocabs_file)
+            
         self.n_subtoks = len(self.subtok_vocab.token_to_idx) - 1 # remove one for unknowns
-        self.other_vocab = mtext.vocab.Vocabulary(self.other_counter, min_freq = min_for_vocabulary)
         self.n_others = len(self.other_vocab.token_to_idx) # unknown remains
         print("Number of subtokens: %d, number of other tokens: %d" % (self.n_subtoks, self.n_others - 1))
     
@@ -106,13 +114,16 @@ class ComboVocab:
         return translation
 
 class ContextLoader:
-    def __init__(self, folder_name = 'data/train_tmp/', batch_size = 32,
+    def __init__(self, vocab, folder_name = 'data/train_tmp/', batch_size = 32,
                  context_width = options['context_width'], max_subtokens_predicted = options['max_subtokens_predicted']):
         self.batch_size = batch_size
         self.context_width = context_width
         self.max_subtokens_predicted = max_subtokens_predicted
         self.context_files = []
         self.context_props = []
+        self.start_token_id = vocab.to_ids(['<<start_id>>'])[0]
+        self.end_token_id = vocab.to_ids(['<<end_id>>'])[0]
+        self.pad_token_id = vocab.to_ids(['<<PAD>>'])[0]
         for filename in os.listdir(folder_name):
             if filename[-4:] != '.bin':
                 continue
@@ -126,17 +137,58 @@ class ContextLoader:
         total_size = sum(self.context_props)
         self.context_props = np.array([size / total_size for size in self.context_props])
             
+    def iterator(self):
+        # for possible future work in making this run on a separate thread with a Queue
+        batch = self.get_batch()
+        while batch is not None:
+            yield batch
+            batch = self.get_batch()
     
     def get_batch(self):
-        # returns random n_contexts of [pre_sequence, post_sequence, input_vars, output_vars]
-        # input vars is something like [<BEGIN> a b c]
-        # output vars is something like [a b c <END>]
-        # if one in the batch is longer than others, pad the rest
-        choice = np.random.choice(len(self.context_files), p = self.context_props)
-        n_contexts, fin = self.context_files[choice]
-        predict_subtokens = struct.unpack('<8I', fin.read(32))
-        pre_contexts, post_contexts = [], []
-        for context_n in range(n_contexts):
-            pre_contexts.append(struct.unpack('<64I', fin.read(256)))
-            post_contexts.append(struct.unpack('<64I', fin.read(256)))
-        return predict_subtokens, pre_contexts, post_contexts
+        """
+        Returns random n_contexts of [pre_context], [post_context], and batched input_vars, target_vars
+        
+        Input vars is something like [<BEGIN> a b c]
+        Output vars is something like [a b c <END>]
+        If one in the batch is longer than others, pad the rest.
+        
+        Inputs have the shape [time, batch]
+        Outputs are of the form [time, batch].reshape((-1,))
+        """
+        while len(self.context_files) > 0:
+            choice = np.random.choice(len(self.context_files), p = self.context_props)
+            n_contexts, fin = self.context_files[choice]
+            try:
+                return self._try_load(n_contexts, fin)
+            except struct.error: # we've run out of room in the file. Hangers-on will be left behind. Oh well.
+                del self.context_files[choice]
+                self.context_props = np.delete(self.context_props, choice)
+                if self.context_props.size > 0:
+                    self.context_props /= np.sum(self.context_props)
+        return None
+    
+    def _try_load(self, n_contexts, fin):
+        # A helper function for get_batch. Will raise an error when file runs out of space.
+        pre_contexts = [np.zeros((self.batch_size, self.context_width)) for i in range(n_contexts)]
+        post_contexts = [np.zeros((self.batch_size, self.context_width)) for i in range(n_contexts)]
+        input_tokens = []
+        output_tokens = []
+        for batch_i in range(self.batch_size):
+            usage = list(struct.unpack('<%dI' % self.max_subtokens_predicted, fin.read(4 * self.max_subtokens_predicted)))
+            usage = usage[:next(i for i in range(len(usage)) if usage[i] == self.pad_token_id)]
+            input_tokens.append([self.start_token_id] + usage)
+            output_tokens.append(usage + [self.end_token_id])
+            for context_n in range(n_contexts):
+                read_pre = struct.unpack('<%dI' % self.context_width, fin.read(4 * self.context_width))
+                read_post = struct.unpack('<%dI' % self.context_width, fin.read(4 * self.context_width))
+                pre_contexts[context_n][batch_i] = read_pre
+                post_contexts[context_n][batch_i] = read_post
+        longest_var = max([len(toks) for toks in input_tokens])
+        input_tokens = [u + [self.pad_token_id for i in range(longest_var - len(u))] for u in input_tokens]
+        output_tokens = [u + [self.pad_token_id for i in range(longest_var - len(u))] for u in output_tokens]
+        input_tokens = np.array(input_tokens).T
+        output_tokens = np.array(output_tokens).T.reshape((-1,))
+        pre_contexts = np.array(pre_contexts).T
+        post_contexts = np.array(post_contexts).T
+
+        return pre_contexts.T, post_contexts.T, input_tokens, output_tokens
