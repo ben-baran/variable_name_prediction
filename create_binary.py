@@ -7,7 +7,7 @@ import re
 from utils import ComboVocab, to_subtokenized_list
 
 
-n_ctx = 64 # size of context per side
+n_ctx = 64 # size of context per side. This is decided earlier in the processing pipeline.
 combo_vocab = ComboVocab()
 
 with open('data/json_seeks.pkl', 'rb') as seeks_file:
@@ -35,18 +35,20 @@ for seek_i, seek in enumerate(file_seeks):
         context_files[n_contexts] = open(save_folder + '%d.bin' % n_contexts, 'wb')
     fout = context_files[n_contexts]
     
-    fout.write(struct.pack('<2I', n_contexts, combo_vocab.to_ids([data['variableName']])[0])) # CORRECT THIS
+    variable_subtokens = combo_vocab.to_ids([data['variableName']])[:8] # maxes out number of subtokens to 8
+    variable_subtokens.extend(combo_vocab.to_ids(['<<PAD>>' for i in range(8 - len(variable_subtokens))]))
+    fout.write(struct.pack('<8I', *variable_subtokens))
+    
     for context in data['usage']:
         context_a = to_subtokenized_list(context[:64])[-64:]
         context_b = to_subtokenized_list(context[129:64:-1])[-64:]
         fout.write(struct.pack('<64I', *combo_vocab.to_ids(context_a)))
         fout.write(struct.pack('<64I', *combo_vocab.to_ids(context_b)))
-        if "<<PAD>>" in context:
-            print("-" * 100)
-            print(context)
-            for o_token, t_token in zip(context_a[:64], combo_vocab.to_tokens(combo_vocab.to_ids(context_a[:64]))):
-                print(o_token, '-->', t_token)
-            break
+        # print("-" * 100)
+        # print(context)
+        # for o_token, t_token in zip(context_a, combo_vocab.to_tokens(combo_vocab.to_ids(context_a))):
+        #     print(o_token, '-->', t_token)
+        # break
     bar.update(1)
     
     if seek_i == max_uses - 1:
