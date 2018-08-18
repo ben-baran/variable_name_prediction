@@ -9,9 +9,9 @@ import json
 import struct
 import time
 
-argument_parser = argparse.ArgumentParser(description = "Train a token predictor for Java")
+argument_parser = argparse.ArgumentParser(description = "Train a variable name predictor for Java")
 
-argument_parser.add_argument("-sdp", "--save-dir-prefix", default = './search_simple/run', type = str,
+argument_parser.add_argument("-sdp", "--save-dir-prefix", default = './search/run', type = str,
                 help = "Directory prefix to save data to. Must not already exist.")
 
 argument_parser.add_argument("-e", "--epochs", default = 1, type = int,

@@ -2,21 +2,10 @@ import json
 from collections import Counter
 import pickle
 import sys
-import re
 from tqdm import tqdm
-
-kw_or_builtin = set(('abstract continue for new switch assert default goto package synchronized '
-     'boolean do if private this break double implements protected throw byte else '
-     'import public throws case enum instanceof return transient catch extends int '
-     'short try char final interface static void class finally long strictfp '
-     'volatile const float native super while true false null').split(' '))
+from utils import is_token, subtokenize
 
 subtok_counter, other_counter = Counter(), Counter()
-
-def is_token(s):
-    if not (s[0].isalpha() or s[0] in '$_'):
-        return False
-    return s not in kw_or_builtin
     
 def update_counts(s):
     if not all(ord(c) < 128 for c in s): # only handle ASCII
@@ -25,15 +14,6 @@ def update_counts(s):
         subtok_counter.update(subtokenize(s))
     else:
         other_counter.update([s])
-    
-def subtokenize(token):
-    c_style = [st for st in token.split('_') if len(st) > 0]
-    subtokens = []
-    for subtoken in c_style:
-        # from https://stackoverflow.com/questions/29916065/how-to-do-camelcase-split-in-python
-        camel_splits = re.finditer('.+?(?:(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|$)', subtoken)
-        subtokens += [split.group(0).lower() for split in camel_splits]
-    return subtokens
 
 fin = open('java_names/output.json', 'r')
 file_seeks = [0]
