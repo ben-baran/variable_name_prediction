@@ -47,8 +47,8 @@ class ComboVocab:
     def __init__(self, counters_fname = 'data/counters.pkl', min_for_vocabulary = 4096):
         with open(counters_fname, 'rb') as counter_file:
             self.subtok_counter, self.other_counter = pickle.load(counter_file)
-        self.subtok_counter['_'] = 4096
-        self.subtok_counter['__'] = 4096 # I had forgotten that these can exist on their own
+        self.subtok_counter['_'] = min_for_vocabulary
+        self.subtok_counter['__'] = min_for_vocabulary # I had forgotten that these can exist on their own
         self.subtok_vocab = mtext.vocab.Vocabulary(self.subtok_counter, min_freq = min_for_vocabulary)
         self.n_subtoks = len(self.subtok_vocab.token_to_idx) - 1 # remove one for unknowns
         self.other_vocab = mtext.vocab.Vocabulary(self.other_counter, min_freq = min_for_vocabulary)

@@ -119,8 +119,8 @@ def batches_gen(f_prefix, time_slice = 256, batch_size = 32, ctx = mx.gpu(0)):
         for i in range(batch_size):
             data_i = batch_starts[batch_i]
             data.seek(data_i * 2)
-            slice_A = struct.unpack('ll', data.read(2)))
-            slice_B = struct.unpack('ll', data.read(2)))
+            slice_A = struct.unpack('ll', data.read(2))
+            slice_B = struct.unpack('ll', data.read(2))
             for slice_i in range(time_slice):
                 tokens_in[i, slice_i] = slice_A[0]
                 types_in[i, slice_i] = slice_A[1]

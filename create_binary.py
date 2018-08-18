@@ -26,7 +26,6 @@ random.shuffle(file_seeks)
 n_unclear_skips = 0
 
 
-
 bar = tqdm(total = min(max_uses, len(file_seeks)), desc = 'processing', unit = 'ctx groups')
 for seek_i, seek in enumerate(file_seeks):
     # For every set of contexts this outputs: N_CTX ID BEFORE_CTX AFTER_CTX BEFORE_CTX AFTER_CTX
@@ -69,7 +68,7 @@ for seek_i, seek in enumerate(file_seeks):
 
         for context in data['usage']:
             context_a = to_subtokenized_list(context[:64])[-64:]
-            context_b = to_subtokenized_list(context[129:64])[:65:-1]
+            context_b = to_subtokenized_list(context[65:])[:-65:-1]
             fout.write(struct.pack('<64I', *combo_vocab.to_ids(context_a)))
             fout.write(struct.pack('<64I', *combo_vocab.to_ids(context_b)))
     
