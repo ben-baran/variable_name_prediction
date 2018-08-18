@@ -52,7 +52,6 @@ def rough_print(toks, indent_level = 3, open_indent = True):
     for tok_i in range(len(toks) - 1):
         if toks[tok_i + 1] == '}':
             indent_level -= 1
-        
         if is_token(toks[tok_i]) and is_token(toks[tok_i + 1]):
             print(toks[tok_i], end = '_')
         elif toks[tok_i] in '{};':
@@ -66,9 +65,7 @@ def rough_print(toks, indent_level = 3, open_indent = True):
             if is_token(toks[tok_i + 1]):
                 print(' ', end = '')
         else:
-            print(toks[tok_i], end = '')
-            if toks[tok_i + 1] != '.':
-                print(' ', end = '')
+            print(toks[tok_i], end = ' ')
     return indent_level
         
     print(toks[-1], end = '')
@@ -180,7 +177,7 @@ class ContextLoader:
     
     def get_batch(self):
         """
-        Returns random n_contexts of [pre_context], [post_context], and batched input_vars, target_vars
+        Returns random n_contexts of [pre_context], [post_context], and batched input_vars, target_vars, target_mask
         
         Input vars is something like [<BEGIN> a b c]
         Output vars is something like [a b c <END>]
@@ -225,8 +222,12 @@ class ContextLoader:
         input_tokens = [u + [self.pad_token_id for i in range(longest_var - len(u))] for u in input_tokens]
         output_tokens = [u + [self.pad_token_id for i in range(longest_var - len(u))] for u in output_tokens]
         input_tokens = mx.nd.array(input_tokens, ctx = self.ctx).T
-        output_tokens = mx.nd.array(output_tokens, ctx = self.ctx).T.reshape((-1,))
+        
+        output_tokens = np.array(output_tokens).T.reshape((-1,))
+        target_mask = mx.nd.array([float(tok != self.pad_token_id) for tok in output_tokens], ctx = self.ctx)
+        output_tokens = mx.nd.array(output_tokens, ctx = self.ctx)
+        
         pre_contexts = mx.nd.array(pre_contexts, ctx = self.ctx).transpose((1, 2, 0))
         post_contexts = mx.nd.array(post_contexts, ctx = self.ctx).transpose((1, 2, 0))
 
-        return pre_contexts.T, post_contexts.T, input_tokens, output_tokens
+        return pre_contexts.T, post_contexts.T, input_tokens, output_tokens, target_mask

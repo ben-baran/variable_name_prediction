@@ -129,7 +129,7 @@ def validation_loss(num_minibatches = 10, verbose = False):
     global test_batches
     i = 0
     avg_loss = 0.0
-    for pre_contexts, post_contexts, in_tokens, target_tokens in validation_data.iterator():
+    for pre_contexts, post_contexts, in_tokens, target_tokens, target_mask in validation_data.iterator():
         i += 1
         output_tokens = model(pre_contexts, post_contexts, in_tokens)
         
@@ -153,6 +153,7 @@ def validation_loss(num_minibatches = 10, verbose = False):
             
         
         L = loss(output_tokens, target_tokens) # TODO(Ben): zero out the irrelevant padding tokens
+        L *= target_mask
         avg_loss += mx.nd.mean(L).asscalar()
         if i == num_minibatches:
             break
@@ -170,10 +171,11 @@ for epoch in range(options.epochs):
     print("\nCurrent learning rate: %f" % cur_lr)
     trainer.set_learning_rate(cur_lr)
     train_data = ContextLoader(vocab, batch_size = 32, folder_name = 'data/train_small/', ctx = ctx)
-    for pre_contexts, post_contexts, in_tokens, target_tokens in train_data.iterator():
+    for pre_contexts, post_contexts, in_tokens, target_tokens, target_mask in train_data.iterator():
         with mx.autograd.record():
             output_tokens = model(pre_contexts, post_contexts, in_tokens)
             L = loss(output_tokens, target_tokens) # TODO(Ben): zero out the irrelevant padding tokens
+            L *= target_mask
             L.backward()
         grads = [i.grad(ctx) for i in model.collect_params().values()]
         mx.gluon.utils.clip_global_norm(grads, options.clip * data_options['context_width'] * options.batch_size) # TODO(Ben): adjust clipping for type of network
