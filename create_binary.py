@@ -12,15 +12,15 @@ combo_vocab = ComboVocab()
 with open('data/json_seeks.pkl', 'rb') as seeks_file:
     file_seeks = pickle.load(seeks_file)
 
-with open('options.json') as options_f:
+with open('data_options.json') as options_f:
     options = json.load(options_f)
     
 fin = open('java_names/output.json', 'r')
 
-train_save_folder = 'data/train_tmp/'
-val_save_folder = 'data/val_tmp/'
-test_save_folder = 'data/test_tmp/'
-max_uses = 20000
+train_save_folder = 'data/train_full/'
+val_save_folder = 'data/val_full/'
+test_save_folder = 'data/test_full/'
+max_uses = int(1e32)
 max_pred_subtokens = options['max_subtokens_predicted']
 proportion_validation = options['proportion_validation']
 proportion_test = options['proportion_test']

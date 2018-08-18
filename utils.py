@@ -7,7 +7,7 @@ import numpy as np
 import struct
 import json
 
-with open('options.json') as options_f:
+with open('data_options.json') as options_f:
     options = json.load(options_f)
 
 kw_or_builtin = set(('abstract continue for new switch assert default goto package synchronized '
@@ -65,6 +65,7 @@ class ComboVocab:
             
         self.n_subtoks = len(self.subtok_vocab.token_to_idx) - 1 # remove one for unknowns
         self.n_others = len(self.other_vocab.token_to_idx) # unknown remains
+        self.total_tokens = self.n_subtoks + self.n_others + len(ComboVocab.literal_constants)
         print("Number of subtokens: %d, number of other tokens: %d" % (self.n_subtoks, self.n_others - 1))
     
     def to_ids(self, l):
@@ -114,7 +115,7 @@ class ComboVocab:
         return translation
 
 class ContextLoader:
-    def __init__(self, vocab, folder_name = 'data/train_tmp/', batch_size = 32,
+    def __init__(self, vocab, folder_name = 'data/train_small/', batch_size = 32,
                  context_width = options['context_width'], max_subtokens_predicted = options['max_subtokens_predicted']):
         self.batch_size = batch_size
         self.context_width = context_width
@@ -161,9 +162,14 @@ class ContextLoader:
             try:
                 return self._try_load(n_contexts, fin)
             except struct.error: # we've run out of room in the file. Hangers-on will be left behind. Oh well.
+                self.context_files[choice][1].close()
                 del self.context_files[choice]
                 self.context_props = np.delete(self.context_props, choice)
                 if self.context_props.size > 0:
+                    if self.context_props.size < 10:
+                        print('*' * 100)
+                        print(self.context_props)
+                        print(np.sum(self.context_props))
                     self.context_props /= np.sum(self.context_props)
         return None
     
@@ -175,7 +181,10 @@ class ContextLoader:
         output_tokens = []
         for batch_i in range(self.batch_size):
             usage = list(struct.unpack('<%dI' % self.max_subtokens_predicted, fin.read(4 * self.max_subtokens_predicted)))
-            usage = usage[:next(i for i in range(len(usage)) if usage[i] == self.pad_token_id)]
+            try:
+                usage = usage[:next((i for i in range(len(usage)) if usage[i] == self.pad_token_id), len(usage))]
+            except StopIteration:
+                pass
             input_tokens.append([self.start_token_id] + usage)
             output_tokens.append(usage + [self.end_token_id])
             for context_n in range(n_contexts):
