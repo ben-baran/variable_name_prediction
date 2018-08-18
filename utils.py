@@ -6,6 +6,7 @@ import os
 import numpy as np
 import struct
 import json
+import mxnet as mx
 
 with open('data_options.json') as options_f:
     options = json.load(options_f)
@@ -116,7 +117,8 @@ class ComboVocab:
 
 class ContextLoader:
     def __init__(self, vocab, folder_name = 'data/train_small/', batch_size = 32,
-                 context_width = options['context_width'], max_subtokens_predicted = options['max_subtokens_predicted']):
+                 context_width = options['context_width'], max_subtokens_predicted = options['max_subtokens_predicted'],
+                 ctx = mx.cpu()):
         self.batch_size = batch_size
         self.context_width = context_width
         self.max_subtokens_predicted = max_subtokens_predicted
@@ -125,6 +127,7 @@ class ContextLoader:
         self.start_token_id = vocab.to_ids(['<<start_id>>'])[0]
         self.end_token_id = vocab.to_ids(['<<end_id>>'])[0]
         self.pad_token_id = vocab.to_ids(['<<PAD>>'])[0]
+        self.ctx = ctx
         for filename in os.listdir(folder_name):
             if filename[-4:] != '.bin':
                 continue
@@ -133,10 +136,12 @@ class ContextLoader:
             
             # we get the size for proportionally sampling the files
             size = os.path.getsize(full_path)
-            self.context_props.append(size)
+            if size == 0:
+                continue # must be some residue from a cancelled run
+            
+            self.context_props.append(size / n_contexts)
             self.context_files.append((n_contexts, open(full_path, 'rb')))
-        total_size = sum(self.context_props)
-        self.context_props = np.array([size / total_size for size in self.context_props])
+        self.context_props = np.array(self.context_props) / np.sum(self.context_props)
             
     def iterator(self):
         # for possible future work in making this run on a separate thread with a Queue
@@ -166,10 +171,6 @@ class ContextLoader:
                 del self.context_files[choice]
                 self.context_props = np.delete(self.context_props, choice)
                 if self.context_props.size > 0:
-                    if self.context_props.size < 10:
-                        print('*' * 100)
-                        print(self.context_props)
-                        print(np.sum(self.context_props))
                     self.context_props /= np.sum(self.context_props)
         return None
     
@@ -195,9 +196,9 @@ class ContextLoader:
         longest_var = max([len(toks) for toks in input_tokens])
         input_tokens = [u + [self.pad_token_id for i in range(longest_var - len(u))] for u in input_tokens]
         output_tokens = [u + [self.pad_token_id for i in range(longest_var - len(u))] for u in output_tokens]
-        input_tokens = np.array(input_tokens).T
-        output_tokens = np.array(output_tokens).T.reshape((-1,))
-        pre_contexts = np.array(pre_contexts).T
-        post_contexts = np.array(post_contexts).T
+        input_tokens = mx.nd.array(input_tokens, ctx = self.ctx).T
+        output_tokens = mx.nd.array(output_tokens, ctx = self.ctx).T.reshape((-1,))
+        pre_contexts = mx.nd.array(pre_contexts, ctx = self.ctx).transpose((0, 2, 1))
+        post_contexts = mx.nd.array(post_contexts, ctx = self.ctx).transpose((0, 2, 1))
 
         return pre_contexts.T, post_contexts.T, input_tokens, output_tokens
