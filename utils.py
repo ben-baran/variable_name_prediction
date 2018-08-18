@@ -5,6 +5,10 @@ import glob
 import os
 import numpy as np
 import struct
+import json
+
+with open('options.json') as options_f:
+    options = json.load(options_f)
 
 kw_or_builtin = set(('abstract continue for new switch assert default goto package synchronized '
      'boolean do if private this break double implements protected throw byte else '
@@ -102,8 +106,11 @@ class ComboVocab:
         return translation
 
 class ContextLoader:
-    def __init__(self, folder_name = 'data/train_tmp/', batch_size = 32):
+    def __init__(self, folder_name = 'data/train_tmp/', batch_size = 32,
+                 context_width = options['context_width'], max_subtokens_predicted = options['max_subtokens_predicted']):
         self.batch_size = batch_size
+        self.context_width = context_width
+        self.max_subtokens_predicted = max_subtokens_predicted
         self.context_files = []
         self.context_props = []
         for filename in os.listdir(folder_name):

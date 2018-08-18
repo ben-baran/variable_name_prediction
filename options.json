@@ -1,0 +1,7 @@
+{
+    "max_subtokens_predicted": 8,
+    "min_token_use": 4096,
+    "context_width": 64,
+    "proportion_validation": 0.1,
+    "proportion_test": 0.1
+}

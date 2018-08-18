@@ -12,14 +12,19 @@ combo_vocab = ComboVocab()
 with open('data/json_seeks.pkl', 'rb') as seeks_file:
     file_seeks = pickle.load(seeks_file)
 
+with open('options.json') as options_f:
+    options = json.load(options_f)
+    
 fin = open('java_names/output.json', 'r')
 
 train_save_folder = 'data/train_tmp/'
 val_save_folder = 'data/val_tmp/'
 test_save_folder = 'data/test_tmp/'
 max_uses = 20000
-proportion_validation = 0.1
-proportion_test = 0.1
+max_pred_subtokens = options['max_subtokens_predicted']
+proportion_validation = options['proportion_validation']
+proportion_test = options['proportion_test']
+ctx_width = options['context_width']
 
 train_context_files, val_context_files, test_context_files = {}, {}, {}
 random.shuffle(file_seeks)
@@ -54,7 +59,7 @@ for seek_i, seek in enumerate(file_seeks):
     
     
     var_subtokens = subtokenize(data['variableName'])
-    var_subids = combo_vocab.to_ids(var_subtokens)[:8] # maxes out number of subtokens to 8
+    var_subids = combo_vocab.to_ids(var_subtokens)[:max_pred_subtokens]
     
     unclear_subtoken = False
     for subtoken in combo_vocab.to_tokens(var_subids): # turn it back into a token to check, so that we can skip over unclear subtokens
@@ -63,14 +68,14 @@ for seek_i, seek in enumerate(file_seeks):
             n_unclear_skips += 1
             break
     if not unclear_subtoken:
-        var_subids.extend(combo_vocab.to_ids(['<<PAD>>' for i in range(8 - len(var_subids))]))
-        fout.write(struct.pack('<8I', *var_subids))
+        var_subids.extend(combo_vocab.to_ids(['<<PAD>>' for i in range(max_pred_subtokens - len(var_subids))]))
+        fout.write(struct.pack('<%dI' % max_pred_subtokens, *var_subids))
 
         for context in data['usage']:
-            context_a = to_subtokenized_list(context[:64])[-64:]
-            context_b = to_subtokenized_list(context[65:])[:-65:-1]
-            fout.write(struct.pack('<64I', *combo_vocab.to_ids(context_a)))
-            fout.write(struct.pack('<64I', *combo_vocab.to_ids(context_b)))
+            context_a = to_subtokenized_list(context[:ctx_width])[-ctx_width:]
+            context_b = to_subtokenized_list(context[ctx_width+1:])[:-(ctx_width+1):-1]
+            fout.write(struct.pack('<%dI' % ctx_width, *combo_vocab.to_ids(context_a)))
+            fout.write(struct.pack('<%dI' % ctx_width, *combo_vocab.to_ids(context_b)))
     
     bar.update(1)
     if seek_i == max_uses - 1:
