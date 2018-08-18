@@ -45,6 +45,34 @@ def to_subtokenized_list(l):
             stized.append(item)
     return stized
 
+def rough_print(toks, indent_level = 3, open_indent = True):
+    # start off with an extra few indent levels for safety
+    if open_indent:
+        print("\t" * indent_level, end = '')
+    for tok_i in range(len(toks) - 1):
+        if toks[tok_i + 1] == '}':
+            indent_level -= 1
+        
+        if is_token(toks[tok_i]) and is_token(toks[tok_i + 1]):
+            print(toks[tok_i], end = '_')
+        elif toks[tok_i] in '{};':
+            if toks[tok_i] == '{':
+                indent_level += 1
+            print(toks[tok_i])
+            print("\t" * indent_level, end = '')
+        elif toks[tok_i] == '<<PAD>>':
+            pass
+        elif toks[tok_i] == '<<end_id>>':
+            if is_token(toks[tok_i + 1]):
+                print(' ', end = '')
+        else:
+            print(toks[tok_i], end = '')
+            if toks[tok_i + 1] != '.':
+                print(' ', end = '')
+    return indent_level
+        
+    print(toks[-1], end = '')
+
 class ComboVocab:
     literal_constants = ['char', 'string', 'float', 'double', 'hex_int', 'bin_int', 'int', 'start_id', 'end_id']
     const_to_literal = {s:i for i, s in enumerate(literal_constants)}

@@ -8,7 +8,7 @@ import shutil
 import json
 import struct
 import time
-from utils import ContextLoader, ComboVocab
+from utils import ContextLoader, ComboVocab, rough_print
 
 argument_parser = argparse.ArgumentParser(description = "Train a variable name predictor for Java")
 
@@ -134,14 +134,22 @@ def validation_loss(num_minibatches = 10, verbose = False):
         output_tokens = model(pre_contexts, post_contexts, in_tokens)
         
         if verbose: # will only print out the first batches
+            out_argmax = output_tokens.reshape((-1, options.batch_size, vocab.total_tokens))[:, 0, :].argmax(axis=1).asnumpy()
+            
             for context_i in range(pre_contexts.shape[0]):
+                if context_i > 3:
+                    break # don't need too much information
+                print("BEGINNING CONTEXT")
                 ids_before = [int(x) for x in pre_contexts[0, :, context_i].asnumpy()]
                 ids_after = [int(x) for x in post_contexts[0, :, context_i].asnumpy()]
-                print('context before:', vocab.to_tokens(ids_before))
-                print('context after:', vocab.to_tokens(ids_after))
-            
-            out_argmax = output_tokens.reshape((-1, options.batch_size, vocab.total_tokens))[:, 0, :].argmax(axis=1).asnumpy()
-            print("The most likely token stream is:", vocab.to_tokens([int(x) for x in out_argmax]))
+                indent_level = rough_print(vocab.to_tokens(ids_before))
+                print('\x1b[%sm' % '6;30;46', end = '') # from https://stackoverflow.com/a/21786287/3487347
+                print('  ', end = '')
+                indent_level = rough_print(vocab.to_tokens([int(x) for x in out_argmax]), indent_level = indent_level, open_indent = False)
+                print(' ', end = '')
+                print('\x1b[0m', end = '')
+                rough_print(vocab.to_tokens(ids_after[::-1]), indent_level = indent_level, open_indent = False)
+                print()
             
         
         L = loss(output_tokens, target_tokens) # TODO(Ben): zero out the irrelevant padding tokens
