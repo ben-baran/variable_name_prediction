@@ -1,6 +1,10 @@
 import re
 import pickle
 import mxnet.contrib.text as mtext
+import glob
+import os
+import numpy as np
+import struct
 
 kw_or_builtin = set(('abstract continue for new switch assert default goto package synchronized '
      'boolean do if private this break double implements protected throw byte else '
@@ -31,12 +35,13 @@ def to_subtokenized_list(l):
                 stized.append(item)
             else:
                 stized.extend(subtokenize(item))
+            stized.append('<<end_id>>')
         else:
             stized.append(item)
     return stized
 
 class ComboVocab:
-    literal_constants = ['char', 'string', 'float', 'double', 'hex_int', 'bin_int', 'int']
+    literal_constants = ['char', 'string', 'float', 'double', 'hex_int', 'bin_int', 'int', 'start_id', 'end_id']
     const_to_literal = {s:i for i, s in enumerate(literal_constants)}
     
     def __init__(self, counters_fname = 'data/counters.pkl', min_for_vocabulary = 4096):
@@ -56,7 +61,10 @@ class ComboVocab:
             if index == 0:
                 new_index = self.other_vocab.to_indices(l[i])
                 if new_index == 0: # tests for literals
-                    if l[i][0] == "'":
+                    removed_brackets = l[i][2:-2]
+                    if removed_brackets in ComboVocab.const_to_literal:
+                        new_index = self.n_others + ComboVocab.const_to_literal[removed_brackets]
+                    elif l[i][0] == "'":
                         new_index = self.n_others + ComboVocab.const_to_literal['char']
                     elif l[i][0] == '"':
                         new_index = self.n_others + ComboVocab.const_to_literal['string']
@@ -82,13 +90,46 @@ class ComboVocab:
                 indices[i] -= 1
         return indices
     
-    def to_tokens(self, l): # non-reversible, i.e. to_ids(to_tokens(l)) will probably not work
+    def to_tokens(self, l):
         translation = [None for x in l]
         for i, x in enumerate(l):
             if x >= self.n_subtoks + self.n_others:
-                translation[i] = '<<' + ComboVocab.literal_constants[x - self.n_subtoks - self.n_others] + '_literal>>'
+                translation[i] = '<<' + ComboVocab.literal_constants[x - self.n_subtoks - self.n_others] + '>>'
             elif x >= self.n_subtoks:
                 translation[i] = self.other_vocab.to_tokens(x - self.n_subtoks)
             else:
                 translation[i] = self.subtok_vocab.to_tokens(x + 1)
         return translation
+
+class ContextLoader:
+    def __init__(self, folder_name = 'data/train_tmp/', batch_size = 32):
+        self.batch_size = batch_size
+        self.context_files = []
+        self.context_props = []
+        for filename in os.listdir(folder_name):
+            if filename[-4:] != '.bin':
+                continue
+            n_contexts = int(filename.split('.')[0])
+            full_path = folder_name + filename
+            
+            # we get the size for proportionally sampling the files
+            size = os.path.getsize(full_path)
+            self.context_props.append(size)
+            self.context_files.append((n_contexts, open(full_path, 'rb')))
+        total_size = sum(self.context_props)
+        self.context_props = np.array([size / total_size for size in self.context_props])
+            
+    
+    def get_batch(self):
+        # returns random n_contexts of [pre_sequence, post_sequence, input_vars, output_vars]
+        # input vars is something like [<BEGIN> a b c]
+        # output vars is something like [a b c <END>]
+        # if one in the batch is longer than others, pad the rest
+        choice = np.random.choice(len(self.context_files), p = self.context_props)
+        n_contexts, fin = self.context_files[choice]
+        predict_subtokens = struct.unpack('<8I', fin.read(32))
+        pre_contexts, post_contexts = [], []
+        for context_n in range(n_contexts):
+            pre_contexts.append(struct.unpack('<64I', fin.read(256)))
+            post_contexts.append(struct.unpack('<64I', fin.read(256)))
+        return predict_subtokens, pre_contexts, post_contexts

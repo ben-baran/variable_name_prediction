@@ -6,7 +6,6 @@ from tqdm import tqdm
 import re
 from utils import ComboVocab, to_subtokenized_list, subtokenize
 
-
 n_ctx = 64 # size of context per side. This is decided earlier in the processing pipeline.
 combo_vocab = ComboVocab()
 
@@ -70,7 +69,7 @@ for seek_i, seek in enumerate(file_seeks):
 
         for context in data['usage']:
             context_a = to_subtokenized_list(context[:64])[-64:]
-            context_b = to_subtokenized_list(context[129:64:-1])[-64:]
+            context_b = to_subtokenized_list(context[129:64])[:65:-1]
             fout.write(struct.pack('<64I', *combo_vocab.to_ids(context_a)))
             fout.write(struct.pack('<64I', *combo_vocab.to_ids(context_b)))
     
