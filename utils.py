@@ -60,15 +60,15 @@ def rough_print(toks, indent_level = 3, open_indent = True):
             print(toks[tok_i])
             print("\t" * indent_level, end = '')
         elif toks[tok_i] == '<<PAD>>':
-            pass
+            continue
         elif toks[tok_i] == '<<end_id>>':
             if is_token(toks[tok_i + 1]):
                 print(' ', end = '')
         else:
             print(toks[tok_i], end = ' ')
+    if toks[-1] != '<<PAD>>' and toks[-1] != '<<end_id>>':
+        print(toks[-1], end = '')
     return indent_level
-        
-    print(toks[-1], end = '')
 
 class ComboVocab:
     literal_constants = ['char', 'string', 'float', 'double', 'hex_int', 'bin_int', 'int', 'start_id', 'end_id']
@@ -157,6 +157,8 @@ class ContextLoader:
             if filename[-4:] != '.bin':
                 continue
             n_contexts = int(filename.split('.')[0])
+            if n_contexts == 0: # for some reason this sometimes gets outputted
+                continue
             full_path = folder_name + filename
             
             # we get the size for proportionally sampling the files
