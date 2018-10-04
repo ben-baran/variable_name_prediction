@@ -17,10 +17,10 @@ with open('data_options.json') as options_f:
     
 fin = open('java_names/output.json', 'r')
 
-train_save_folder = 'data/train_small/'
-val_save_folder = 'data/val_small/'
-test_save_folder = 'data/test_small/'
-max_uses = int(500000)
+train_save_folder = 'data/train_full/'
+val_save_folder = 'data/val_full/'
+test_save_folder = 'data/test_full/'
+max_uses = int(1e32)
 max_pred_subtokens = options['max_subtokens_predicted']
 proportion_validation = options['proportion_validation']
 proportion_test = options['proportion_test']
@@ -29,6 +29,7 @@ ctx_width = options['context_width']
 train_context_files, val_context_files, test_context_files = {}, {}, {}
 random.shuffle(file_seeks)
 n_unclear_skips = 0
+MAX_OPEN_FILES = 512
 
 
 n_processed = 0
@@ -76,6 +77,11 @@ for seek_i, seek in enumerate(file_seeks):
             context_b = to_subtokenized_list(context[ctx_width+1:])[ctx_width-1::-1]
             fout.write(struct.pack('<%dI' % ctx_width, *combo_vocab.to_ids(context_a)))
             fout.write(struct.pack('<%dI' % ctx_width, *combo_vocab.to_ids(context_b)))
+    
+    if len(context_files) > MAX_OPEN_FILES:
+        highest_open = max(context_files.keys())
+        context_files[highest_open].close()
+        del context_files[highest_open]
     
     n_processed += 1
     bar.update(1)
