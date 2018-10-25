@@ -29,7 +29,7 @@ ctx_width = options['context_width']
 train_context_files, val_context_files, test_context_files = {}, {}, {}
 random.shuffle(file_seeks)
 n_unclear_skips = 0
-MAX_OPEN_FILES = 512
+MAX_OPEN_FILES_PER = 170
 
 
 n_processed = 0
@@ -78,7 +78,7 @@ for seek_i, seek in enumerate(file_seeks):
             fout.write(struct.pack('<%dI' % ctx_width, *combo_vocab.to_ids(context_a)))
             fout.write(struct.pack('<%dI' % ctx_width, *combo_vocab.to_ids(context_b)))
     
-    if len(context_files) > MAX_OPEN_FILES:
+    if len(context_files) > MAX_OPEN_FILES_PER:
         highest_open = max(context_files.keys())
         context_files[highest_open].close()
         del context_files[highest_open]

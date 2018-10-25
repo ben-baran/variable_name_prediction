@@ -49,23 +49,40 @@ argument_parser.add_argument("--time-limit", default = int(1e15), type = int,
 argument_parser.add_argument('--tie-weights', action = 'store_true',
                     help = 'If you tie the weights of the decoder and encoder, you have to have an extra funneling step.')
 
-argument_parser.set_defaults(tie_weights = False)
+argument_parser.add_argument("--gpu", default = 3, type = int,
+                help = "Which gpu to train on.")
+
+argument_parser.add_argument('--restart', default = False, action = 'store_true',
+                    help = 'If this is enabled, find the last run with the same SDP and load it, continuing training.')
+
+argument_parser.add_argument('--restart-dir', default = '', type = str,
+                    help = 'Continue training the directory specified. Will cancel out --continue.')
+
+argument_parser.set_defaults(tie_weights = False, restart = False)
 options = argument_parser.parse_args()
 
 with open('data_options.json') as data_options_f:
     data_options = json.load(data_options_f)
 
-save_dir = options.save_dir_prefix + datetime.datetime.now().strftime('.%Y.%m.%d.%H.%M.%S/')
-if os.path.exists(save_dir):
-    print('Save directory already exists!')
+if len(options.restart_dir) > 0:
+    print(options.restart_dir)
     quit()
+elif options.restart:
+    print("restart")
+    quit()
+else:
+    save_dir = options.save_dir_prefix + datetime.datetime.now().strftime('.%Y.%m.%d.%H.%M.%S/')
+    if os.path.exists(save_dir):
+        print('Save directory already exists!')
+        quit()
+    os.makedirs(save_dir)
+    shutil.copyfile(__file__, save_dir + 'train.py')
+    with open(save_dir + 'run_options.json', 'w') as options_file:
+        json.dump(vars(options), options_file, indent = 1)
 
-os.makedirs(save_dir)
-shutil.copyfile(__file__, save_dir + 'train.py')
-with open(save_dir + 'run_options.json', 'w') as options_file:
-    json.dump(vars(options), options_file, indent = 1)
 
-ctx = mx.gpu(3)
+
+ctx = mx.gpu(options.gpu)
 vocab = ComboVocab()
 model = BidirectionalModel(vocab,
                            hidden_per_side = options.hidden_per_side,
@@ -141,6 +158,7 @@ for epoch in range(options.epochs):
         if iteration % 500 == 0:
             print("%dth iteration. Saving." % iteration)
             model.collect_params().save(save_dir + 'epoch-%d-%.6d.params' % (epoch, len(validation_losses)))
+            trainer.save_states(save_dir + 'epoch-%d-%.6d.trainer' % (epoch, len(validation_losses)))
             validation_loss(num_minibatches = 1, verbose = True)
             np.save(save_dir + 'validation_losses', np.array(validation_losses))
         if time.time() - start_global > options.time_limit:
