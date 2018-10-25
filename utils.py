@@ -141,18 +141,24 @@ class ComboVocab:
         return translation
 
 class ContextLoader:
-    def __init__(self, vocab, folder_name = 'data/train_small/', batch_size = 32,
+    def __init__(self, vocab, load_from = None,
+                 folder_name = 'data/train_small/', batch_size = 32,
                  context_width = options['context_width'], max_subtokens_predicted = options['max_subtokens_predicted'],
                  ctx = mx.cpu()):
+        self.start_token_id = vocab.to_ids(['<<start_id>>'])[0]
+        self.end_token_id = vocab.to_ids(['<<end_id>>'])[0]
+        self.pad_token_id = vocab.to_ids(['<<PAD>>'])[0]
+        self.ctx = ctx
+        
+        if load_from is not None:
+            self.load_state(load_from)
+            return
+        
         self.batch_size = batch_size
         self.context_width = context_width
         self.max_subtokens_predicted = max_subtokens_predicted
         self.context_files = []
         self.context_props = []
-        self.start_token_id = vocab.to_ids(['<<start_id>>'])[0]
-        self.end_token_id = vocab.to_ids(['<<end_id>>'])[0]
-        self.pad_token_id = vocab.to_ids(['<<PAD>>'])[0]
-        self.ctx = ctx
         for filename in os.listdir(folder_name):
             if filename[-4:] != '.bin':
                 continue
@@ -169,6 +175,32 @@ class ContextLoader:
             self.context_props.append(size / n_contexts)
             self.context_files.append((n_contexts, open(full_path, 'rb')))
         self.context_props = np.array(self.context_props) / np.sum(self.context_props)
+        
+    def save_state(self, filename):
+        surrogate = {}
+        surrogate['batch_size'] = self.batch_size
+        surrogate['context_width'] = self.context_width
+        surrogate['max_subtokens_predicted'] = self.max_subtokens_predicted
+        surrogate['context_files'] = []
+        for n_contexts, file in self.context_files:
+            surrogate['context_files'].append((n_contexts, file.name, file.tell()))
+        surrogate['context_props'] = self.context_props
+        with open(filename, 'wb') as pickle_file:
+            pickle.dump(surrogate, pickle_file)
+        
+    
+    def load_state(self, load_from):
+        with open(load_from, 'rb') as pickle_file:
+            surrogate = pickle.load(pickle_file)
+        self.batch_size = surrogate['batch_size']
+        self.context_width = surrogate['context_width']
+        self.max_subtokens_predicted = surrogate['max_subtokens_predicted']
+        self.context_files = []
+        for n_contexts, filename, position in surrogate['context_files']:
+            f = open(filename, 'rb')
+            f.seek(position)
+            self.context_files.append((n_contexts, f))
+        self.context_props = surrogate['context_props']
             
     def iterator(self):
         # for possible future work in making this run on a separate thread with a Queue
@@ -193,7 +225,7 @@ class ContextLoader:
             n_contexts, fin = self.context_files[choice]
             try:
                 return self._try_load(n_contexts, fin)
-            except struct.error: # we've run out of room in the file. Hangers-on will be left behind. Oh well.
+            except struct.error: # we've run out of room in the file. Hangers-on will be left behind.
                 self.context_files[choice][1].close()
                 del self.context_files[choice]
                 self.context_props = np.delete(self.context_props, choice)
